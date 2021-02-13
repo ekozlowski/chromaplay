@@ -8,103 +8,97 @@ class APIException(Exception):
     """Raised when there was an error returned from the Chroma API call."""
     pass
 
-headers = {
-    "content-type": "application/json"
-}
 
-def initialize():
-    data = json.load(open('./chrome_data_post.json', 'r'))
-    response = requests.post("http://localhost:54235/razer/chromasdk", json=data, headers=headers)
-    log.debug(response)
-    log.debug(response.text)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        uri = data.get('uri')
-        sessionid = data.get('sessionid')
-    else:
-        raise APIException("Problem initializing API connection.  Response code: {response.status_code}\nText: {response.text}")
-    return uri
-
-uri = initialize()
-
-
-def precreate_keyboard_effect(effect, data):
-    if effect == "CHROMA_NONE":
-        d = {"effect": effect}
-    elif effect == "CHROMA_CUSTOM":
-        d = {"effect": effect, "param": data}
-    elif effect == "CHROMA_STATIC":
-        color = {"color": data}
-        d = {"effect": effect, "param": color}
-    elif effect == "CHROMA_CUSTOM_KEY":
-        d = {"effect": effect, "param": data}
-    logger.debug(d)
-    response = requests.post(uri + "/keyboard", json=d, headers=headers)
-    logger.debug(response)
-    logger.debug(response.text)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        if data.get('error') is None:
-            effectid = data.get('id')
+class Chroma:
+    def __init__(self):
+        self.headers = {
+            "content-type": "application/json"
+        }
+        self.uri = None
+        data = json.load(open('chroma_data_post.json', 'r'))
+        response = requests.post("http://localhost:54235/razer/chromasdk", json=data, headers=self.headers)
+        logger.debug(response)
+        logger.debug(response.text)
+        if response.status_code == 200:
+            data = json.loads(response.text)
+            self.uri = data.get('uri')
+            self.sessionid = data.get('sessionid')
         else:
-            raise APIException("Error precreating keyboard effect.\nResponse: {response.text}")
-    else:
-        raise APIException(f"Status code not 200 - Status code: {response.status_code}\nMessage: {response.text}")
-    return effectid
+            raise APIException("Problem initializing API connection.  Response code: {response.status_code}\nText: {response.text}")
+    
+    def keyboard_post(self, data):
+        response = requests.post(self.uri + "/keyboard", json=data, headers=self.headers)
+        logger.debug(response)
+        logger.debug(response.text)
+        return response
 
-def apply_effect(effect_id):
-    data = {
-        "id": f"{effectid}"
-    }
-    response = requests.put(uri + "/effect", json=data, headers=headers)
-    logger.debug(f"Response: {response}")
+    def apply_effect(self, effect_id):
+        data = {
+            "id": f"{effect_id}"
+        }
+        response = requests.put(self.uri + "/effect", json=data, headers=self.headers)
+        logger.debug(f"Response: {response}")
+        return response
+
+    def precreate_keyboard_effect(self, effect, data):
+        if effect == "CHROMA_NONE":
+            d = {"effect": effect}
+        elif effect == "CHROMA_CUSTOM":
+            d = {"effect": effect, "param": data}
+        elif effect == "CHROMA_STATIC":
+            color = {"color": data}
+            d = {"effect": effect, "param": color}
+        elif effect == "CHROMA_CUSTOM_KEY":
+            d = {"effect": effect, "param": data}
+        logger.debug(d )
+        response = self.keyboard_post(d)
+        if response.status_code == 200:
+            data = json.loads(response.text)
+            if data.get('error') is None:
+                effectid = data.get('id')
+            else:
+                raise APIException("Error precreating keyboard effect.\nResponse: {response.text}")
+        else:
+            raise APIException(f"Status code not 200 - Status code: {response.status_code}\nMessage: {response.text}")
+        return effectid
+
+    def create_static_effect(self, color):
+        return self.precreate_keyboard_effect(effect="CHROMA_STATIC", data=color)
+
+    def get_color(self, color_name):
+        # Color in this world, is the BGR color in Hex 
+        colormap = {
+            "red": 0x0000FF,
+            "green": 0x00FF00,
+            "blue": 0xFF0000,
+            "black": 0x000000
+        }
+        return colormap.get(color_name)
 
 
-def create_static_effect(color):
-    return precreate_keyboard_effect(effect="CHROMA_STATIC", data=color)
-
-def apply_effect(effect_id):
-    data = {
-        "id": f"{effect_id}"
-    }
-    response = requests.put(uri + "/effect", json=data, headers=headers)
-    logger.debug(response)
-    logger.debug(response.text)
-
-
-def get_color(color_name):
-    # Color in this world, is the BGR color in Hex 
-    colormap = {
-        "red": 0x0000FF,
-        "green": 0x00FF00,
-        "blue": 0xFF0000,
-        "black": 0x000000
-    }
-    return colormap.get(color_name)
-
-
-def heartbeat():
-    response = requests.put(uri + "/heartbeat", json={}, headers=headers)
-    logger.debug(response)
-    logger.debug(response.text)
-    time.sleep(.1)
+    def heartbeat(self):
+        response = requests.put(self.uri + "/heartbeat", json={}, headers=self.headers)
+        logger.debug(response)
+        logger.debug(response.text)
+        
 
 def flashy_green_red_blue_keyboard():
     times = 10
-    red_id = create_static_effect(get_color('red')) # Red
-    green_id = create_static_effect(get_color('green')) # Green
-    blue_id = create_static_effect(get_color('blue')) # Blue
-
+    c = Chroma()
+    red_effect = c.create_static_effect(c.get_color('red'))
+    green_effect = c.create_static_effect(c.get_color('green'))
+    blue_effect = c.create_static_effect(c.get_color('blue'))
+    
     for _ in range(1):
         #effect_id = create_static_effect(65280) # Green
         time.sleep(3)
         
         while(True):
-            apply_effect(red_id)
+            c.apply_effect(red_effect)
             time.sleep(.1)
-            apply_effect(green_id)
+            c.apply_effect(green_effect)
             time.sleep(.1)
-            apply_effect(blue_id)
+            c.apply_effect(blue_effect)
             time.sleep(.1)
 
 # To program keyboard effects, We program 21 columns, 6 rows, and give each
@@ -140,9 +134,11 @@ def create_checkerboard_keyboard():
 
 
 if __name__ == "__main__":
-    effect = create_checkerboard_keyboard()
-    time.sleep(2)
-    apply_effect(effect)
+    flashy_green_red_blue_keyboard()
+
+    #effect = create_checkerboard_keyboard()
+    #time.sleep(2)
+    #apply_effect(effect)
 
 
 
