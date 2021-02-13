@@ -1,0 +1,10 @@
+{
+  "chroma": {
+    "developerName": "Edward Kozlowski",
+    "developerContact": "ekozlowski1@gmail.com",
+    "category": "application",
+    "supportedDevices": ["keyboard"],
+    "description": "Playing with Razer Chroma API",
+    "title": "Hello Chroma API"
+  }
+}
