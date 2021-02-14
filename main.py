@@ -4,20 +4,18 @@ import requests
 import json
 import threading
 
+RUNNING = True
 
 class APIException(Exception):
     """Raised when there was an error returned from the Chroma API call."""
     pass
 
-LAST_API_REQUEST = None
-RUNNING = True
 
 def keepalive(chroma_obj):
-    global RUNNING, LAST_API_REQUEST
     # while we're running, if the last API request is more than 5 seconds 
     # old, make a keepalive API request, until RUNNING is False.
     while RUNNING:
-        if time.time() - LAST_API_REQUEST > 5:
+        if time.time() - chroma_obj.last_api_request > 5:
             chroma_obj.heartbeat()
         else:
             time.sleep(1)
@@ -29,9 +27,10 @@ class Chroma:
             "content-type": "application/json"
         }
         self.uri = None
+        self.last_api_request = None
         data = json.load(open('chroma_data_post.json', 'r'))
         response = requests.post("http://localhost:54235/razer/chromasdk", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
         if response.status_code == 200:
@@ -49,20 +48,18 @@ class Chroma:
 
 
     def keyboard_post(self, data):
-        global LAST_API_REQUEST
         response = requests.post(self.uri + "/keyboard", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
         return response
 
     def apply_effect(self, effect_id):
-        global LAST_API_REQUEST
         data = {
             "id": f"{effect_id}"
         }
         response = requests.put(self.uri + "/effect", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(f"Response: {response}")
         return response
 
@@ -103,9 +100,8 @@ class Chroma:
 
 
     def heartbeat(self):
-        global LAST_API_REQUEST
         response = requests.put(self.uri + "/heartbeat", json={}, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
         
