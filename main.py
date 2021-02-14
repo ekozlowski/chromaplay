@@ -4,34 +4,32 @@ import requests
 import json
 import threading
 
-
 class APIException(Exception):
     """Raised when there was an error returned from the Chroma API call."""
     pass
 
-LAST_API_REQUEST = None
-RUNNING = True
 
 def keepalive(chroma_obj):
-    global RUNNING, LAST_API_REQUEST
     # while we're running, if the last API request is more than 5 seconds 
-    # old, make a keepalive API request, until RUNNING is False.
-    while RUNNING:
-        if time.time() - LAST_API_REQUEST > 5:
+    # old, make a keepalive API request, until the Chroma object's running
+    # attribute is False.
+    while chroma_obj.running:
+        if time.time() - chroma_obj.last_api_request > 5:
             chroma_obj.heartbeat()
         else:
             time.sleep(1)
 
 class Chroma:
     def __init__(self):
-        global RUNNING, LAST_API_REQUEST
+        self.running = True
         self.headers = {
             "content-type": "application/json"
         }
         self.uri = None
+        self.last_api_request = None
         data = json.load(open('chroma_data_post.json', 'r'))
         response = requests.post("http://localhost:54235/razer/chromasdk", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
         if response.status_code == 200:
@@ -49,20 +47,18 @@ class Chroma:
 
 
     def keyboard_post(self, data):
-        global LAST_API_REQUEST
         response = requests.post(self.uri + "/keyboard", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
         return response
 
     def apply_effect(self, effect_id):
-        global LAST_API_REQUEST
         data = {
             "id": f"{effect_id}"
         }
         response = requests.put(self.uri + "/effect", json=data, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(f"Response: {response}")
         return response
 
@@ -103,12 +99,15 @@ class Chroma:
 
 
     def heartbeat(self):
-        global LAST_API_REQUEST
         response = requests.put(self.uri + "/heartbeat", json={}, headers=self.headers)
-        LAST_API_REQUEST = time.time()
+        self.last_api_request = time.time()
         logger.debug(response)
         logger.debug(response.text)
-        
+
+    def shutdown(self):
+        self.running = False
+
+
 
 def flashy_green_red_blue_keyboard(c):
     times = 10
@@ -134,25 +133,15 @@ def flashy_green_red_blue_keyboard(c):
             time.sleep(.1)
             c.apply_effect(blue_effect)
             time.sleep(.1)
-        time.sleep(20)
-        for x in range(10):
-            c.apply_effect(red_effect)
-            time.sleep(.1)
-            c.apply_effect(green_effect)
-            time.sleep(.1)
-            c.apply_effect(blue_effect)
-            time.sleep(.1)
         
-
+    
 # To program keyboard effects, We program 21 columns, 6 rows, and give each
 # row a Chroma color, or a 0 to indicate "off".
 # Let's try making "every other key" green.
 
-def create_checkerboard_keyboard():
+def create_checkerboard_keyboard(chroma_obj):
     rows = 6
     cols = 22
-    
-    
     data = []
     keys = []
     d = {"key": keys, "color": data}
@@ -163,17 +152,16 @@ def create_checkerboard_keyboard():
         keys.append(that)
         for y in range(cols):
             if y % 2 == 0:
-                this.append(get_color('green')) # green
+                this.append(chroma_obj.get_color('green')) # green
             else:
-                this.append(get_color('red')) # red
-            if y % 3 == 0:
-                that.append(get_color('black'))
+                this.append(chroma_obj.get_color('red')) # red
+            if y % 3 != 0:
+                that.append(0x01000000)
             else:
-                that.append(get_color('black'))
-
-    print(data)
-    return precreate_keyboard_effect("CHROMA_CUSTOM_KEY", d)
-
+                that.append(chroma_obj.get_color('black'))
+    effect = chroma_obj.precreate_keyboard_effect("CHROMA_CUSTOM_KEY", d)
+    time.sleep(2)
+    chroma_obj.apply_effect(effect)
 
 
 if __name__ == "__main__":
@@ -183,16 +171,15 @@ if __name__ == "__main__":
     keepalive_thread = threading.Thread(target=keepalive, args=(c,))
     keepalive_thread.start()
     try:
-        flashy_green_red_blue_keyboard(c)
+        create_checkerboard_keyboard(c)
+        #flashy_green_red_blue_keyboard(c)
     except KeyboardInterrupt:
         pass
-    RUNNING = False
+    time.sleep(10)
+    c.shutdown()
     keepalive_thread.join()
     del(c)
     
     #effect = create_checkerboard_keyboard()
     #time.sleep(2)
     #apply_effect(effect)
-
-
-
