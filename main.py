@@ -168,14 +168,17 @@ if __name__ == "__main__":
     # create a chroma obj.
     c = Chroma()
     # spinoff a thread to keep our Chroma object alive.
-    keepalive_thread = threading.Thread(target=keepalive, args=(c,))
-    keepalive_thread.start()
+    print('sleeping')
+    time.sleep(5)
+
+    #keepalive_thread = threading.Thread(target=keepalive, args=(c,))
+    #keepalive_thread.start()
     try:
         create_checkerboard_keyboard(c)
         #flashy_green_red_blue_keyboard(c)
     except KeyboardInterrupt:
         pass
-    time.sleep(10)
+    time.sleep(20)
     c.shutdown()
     keepalive_thread.join()
     del(c)
